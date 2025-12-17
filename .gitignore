@@ -1,5 +1,8 @@
 # Environment variables
 .env
+*.log
+*.pyc
+*__pycache__/
 
 # Keep example file
 !.env.example
