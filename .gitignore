@@ -6,3 +6,4 @@
 
 # Keep example file
 !.env.example
+*.cache

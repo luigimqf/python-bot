@@ -1,15 +1,49 @@
 import discord
 import yt_dlp
 import asyncio
+import re
+import os
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
 from discord.ext import commands
 from discord import app_commands
 from collections import deque
 from utils.embeds import create_music_embed, create_error_embed, create_success_embed
 
+
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.song_queues = {}
+        self.spotify = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
+            client_id=os.getenv('SPOTIFY_CLIENT_ID'),
+            client_secret=os.getenv('SPOTIFY_CLIENT_SECRET')
+        ))
+
+    def is_spotify_url(self, url: str) -> bool:
+        return 'spotify.com' in url or 'open.spotify' in url
+
+    async def get_spotify_tracks(self, url: str):
+        if 'track' in url:
+            track = self.spotify.track(url)
+            return [{
+                'name': track['name'],
+                'artist': track['artists'][0]['name'],
+                'search_query': f"{track['artists'][0]['name']} - {track['name']}"
+            }]
+        elif 'playlist' in url:
+            playlist_id = re.search(r'playlist/([a-zA-Z0-9]+)', url).group(1)
+            results = self.spotify.playlist_items(playlist_id)
+            tracks = []
+            for item in results['items']:
+                track = item['track']
+                tracks.append({
+                    'name': track['name'],
+                    'artist': track['artists'][0]['name'],
+                    'search_query': f"{track['artists'][0]['name']} - {track['name']}"
+                })
+            return tracks
+        return []
     
     async def search_youtube(self, query, ydl_options):
         loop = asyncio.get_event_loop()
@@ -63,6 +97,10 @@ class Music(commands.Cog):
         elif voice_client.channel != voice_channel:
             await voice_client.move_to(voice_channel)
 
+        guild_id = str(interaction.guild.id)
+        if self.song_queues.get(guild_id) is None:
+            self.song_queues[guild_id] = deque()
+
         ydl_options = {
             'format': 'bestaudio[abr<=96]/bestaudio',
             'noplaylist': True,
@@ -70,33 +108,77 @@ class Music(commands.Cog):
             'youtube_include_hls_manifest': False,
         }
 
-        search_query = f"ytsearch:{query}"
-        results = await self.search_youtube(search_query, ydl_options)
-        tracks = results.get('entries', [])
+        if self.is_spotify_url(query):
+            try:
+                spotify_tracks = await self.get_spotify_tracks(query)
+                
+                if not spotify_tracks:
+                    embed = create_error_embed("Não foi possível processar o link do Spotify.")
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                    return
 
-        if not tracks:
-            embed = create_error_embed("Nenhuma música encontrada para a consulta fornecida.")
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-
-        track = tracks[0]
-        url = track['url']
-        title = track.get('title', 'Título desconhecido')
-
-        guild_id = str(interaction.guild.id)
-        if self.song_queues.get(guild_id) is None:
-            self.song_queues[guild_id] = deque()
-        
-        self.song_queues[guild_id].append((url, title))
-
-        if voice_client.is_playing():
-            embed = create_music_embed("Adicionado à Fila", f"**{title}**")
-            embed.add_field(name="Posição na fila", value=f"{len(self.song_queues[guild_id])}", inline=True)
-            await interaction.followup.send(embed=embed)
+                added_count = 0
+                for spotify_track in spotify_tracks:
+                    search_query = f"ytsearch:{spotify_track['search_query']}"
+                    results = await self.search_youtube(search_query, ydl_options)
+                    tracks = results.get('entries', [])
+                    
+                    if tracks:
+                        track = tracks[0]
+                        url = track['url']
+                        title = f"{spotify_track['artist']} - {spotify_track['name']}"
+                        self.song_queues[guild_id].append((url, title))
+                        added_count += 1
+                
+                if added_count == 0:
+                    embed = create_error_embed("Nenhuma música do Spotify foi encontrada no YouTube.")
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                    return
+                
+                if added_count == 1:
+                    title = f"{spotify_tracks[0]['artist']} - {spotify_tracks[0]['name']}"
+                    if voice_client.is_playing():
+                        embed = create_music_embed("Adicionado à Fila (Spotify)", f"**{title}**")
+                        embed.add_field(name="Posição na fila", value=f"{len(self.song_queues[guild_id])}", inline=True)
+                        await interaction.followup.send(embed=embed)
+                    else:
+                        embed = create_music_embed("Tocando Agora (Spotify)", f"**{title}**")
+                        await interaction.followup.send(embed=embed)
+                        await self.play_next(voice_client, guild_id, voice_channel)
+                else:
+                    embed = create_music_embed("Playlist/Álbum Adicionado (Spotify)", f"**{added_count} músicas** adicionadas à fila")
+                    await interaction.followup.send(embed=embed)
+                    if not voice_client.is_playing():
+                        await self.play_next(voice_client, guild_id, voice_channel)
+                    
+            except Exception as e:
+                embed = create_error_embed(f"Erro ao processar link do Spotify: {str(e)}")
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
         else:
-            embed = create_music_embed("Tocando Agora", f"**{title}**")
-            await interaction.followup.send(embed=embed)
-            await self.play_next(voice_client, guild_id, voice_channel)
+            search_query = f"ytsearch:{query}"
+            results = await self.search_youtube(search_query, ydl_options)
+            tracks = results.get('entries', [])
+
+            if not tracks:
+                embed = create_error_embed("Nenhuma música encontrada para a consulta fornecida.")
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                return
+
+            track = tracks[0]
+            url = track['url']
+            title = track.get('title', 'Título desconhecido')
+            
+            self.song_queues[guild_id].append((url, title))
+
+            if voice_client.is_playing():
+                embed = create_music_embed("Adicionado à Fila", f"**{title}**")
+                embed.add_field(name="Posição na fila", value=f"{len(self.song_queues[guild_id])}", inline=True)
+                await interaction.followup.send(embed=embed)
+            else:
+                embed = create_music_embed("Tocando Agora", f"**{title}**")
+                await interaction.followup.send(embed=embed)
+                await self.play_next(voice_client, guild_id, voice_channel)
 
     @app_commands.command(name="skip", description="Pula a música atual.")
     async def skip(self, interaction: discord.Interaction):
