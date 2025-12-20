@@ -19,7 +19,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 @bot.event
 async def on_ready():
-    # test_guild = discord.Object(id=GUILD_ID)
+    # test_guild = discord.Object(id=GUILD_ID) //Teste em servidor específico
     # await bot.tree.sync(guild=test_guild)
     await bot.tree.sync()
     print(f"Bot está pronto! Conectado como {bot.user}")

@@ -8,7 +8,6 @@ class EmbedColors:
     MUSIC = 0x9b59b6
 
 def create_music_embed(title: str, description: str = None, color: int = EmbedColors.MUSIC) -> discord.Embed:
-    """Cria um embed para mensagens relacionadas a música"""
     embed = discord.Embed(
         title=f"🎵 {title}",
         description=description,
@@ -18,7 +17,6 @@ def create_music_embed(title: str, description: str = None, color: int = EmbedCo
     return embed
 
 def create_error_embed(message: str) -> discord.Embed:
-    """Cria um embed para mensagens de erro"""
     embed = discord.Embed(
         title="❌ Erro",
         description=message,
@@ -27,7 +25,6 @@ def create_error_embed(message: str) -> discord.Embed:
     return embed
 
 def create_success_embed(message: str) -> discord.Embed:
-    """Cria um embed para mensagens de sucesso"""
     embed = discord.Embed(
         title="✅ Sucesso",
         description=message,
@@ -36,7 +33,6 @@ def create_success_embed(message: str) -> discord.Embed:
     return embed
 
 def create_info_embed(title: str, description: str) -> discord.Embed:
-    """Cria um embed para mensagens informativas"""
     embed = discord.Embed(
         title=f"ℹ️ {title}",
         description=description,
