@@ -1,5 +1,7 @@
 import discord
+from utils.log_config import get_logger
 
+log = get_logger(__name__)
 class EmbedColors:
     SUCCESS = 0x00FF00
     ERROR = 0xFF0000

@@ -9,7 +9,9 @@ from discord.ext import commands
 from discord import app_commands
 from collections import deque
 from utils.embeds import create_music_embed, create_error_embed, create_success_embed
+from utils.log_config import get_logger
 
+log = get_logger(__name__)
 
 class Music(commands.Cog):
     def __init__(self, bot):
@@ -66,7 +68,7 @@ class Music(commands.Cog):
 
             def after_playing(error):
                 if error:
-                    print(f"Erro ao tocar música: {error}")
+                    log.error(f"Erro ao tocar música: {error}")
                 asyncio.run_coroutine_threadsafe(
                     self.play_next(voice_client, guild_id, channel),
                     self.bot.loop

@@ -1,15 +1,14 @@
 import os
 import discord
-import logging
 import asyncio
 from discord.ext import commands
 from dotenv import load_dotenv
-
+from utils.log_config import setup_logging
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
 GUILD_ID = int(os.getenv('GUILD_ID'))
 
-handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
+log = setup_logging()
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -22,7 +21,7 @@ async def on_ready():
     # test_guild = discord.Object(id=GUILD_ID) //Teste em servidor específico
     # await bot.tree.sync(guild=test_guild)
     await bot.tree.sync()
-    print(f"Bot está pronto! Conectado como {bot.user}")
+    log.info(f"Bot está pronto! Conectado como {bot.user}")
 
 async def load_extensions():
     extensions = [
@@ -32,9 +31,9 @@ async def load_extensions():
     for extension in extensions:
         try:
             await bot.load_extension(extension)
-            print(f"✅ Extensão '{extension}' carregada com sucesso")
+            log.info(f"✅ Extensão '{extension}' carregada com sucesso")
         except Exception as e:
-            print(f"❌ Erro ao carregar extensão '{extension}': {e}")
+            log.error(f"❌ Erro ao carregar extensão '{extension}': {e}")
 
 async def main():
     async with bot:
