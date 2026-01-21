@@ -59,12 +59,15 @@ class Music(commands.Cog):
         if self.song_queues[guild_id]:
             url, title = self.song_queues[guild_id].popleft()
 
-            ffmpeg_options = {
-                'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-                'options': '-vn -c:a libopus -b:a 96k',
-            }
+            if os.path.isfile(url):
+                ffmpeg_options = {'options': '-vn -c:a libopus -b:a 96k'}
+            else:
+                ffmpeg_options = {
+                    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+                    'options': '-vn -c:a libopus -b:a 96k',
+                }
 
-            source = discord.FFmpegOpusAudio(url, **ffmpeg_options, executable="bin\\ffmpeg\\ffmpeg.exe")
+            source = discord.FFmpegOpusAudio(url, **ffmpeg_options)
 
             def after_playing(error):
                 if error:
@@ -109,7 +112,18 @@ class Music(commands.Cog):
             'youtube_include_dash_manifest': False,
             'youtube_include_hls_manifest': False,
         }
-
+        if os.path.isfile(query):
+            self.song_queues[guild_id].append((query, f"Arquivo Local: {query}"))
+            
+            if voice_client.is_playing():
+                embed = create_music_embed("Adicionado à Fila (Local)", f"**{query}**")
+                await interaction.followup.send(embed=embed)
+            else:
+                embed = create_music_embed("Tocando Agora (Local)", f"**{query}**")
+                await interaction.followup.send(embed=embed)
+                await self.play_next(voice_client, guild_id, voice_channel)
+            return
+        
         if self.is_spotify_url(query):
             try:
                 spotify_tracks = await self.get_spotify_tracks(query)
